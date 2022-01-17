@@ -150,3 +150,6 @@ static/
 posts/static/
 media/
 
+else.py
+func.py
+tt.py
