@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 import requests
 import time
 from telegram import Bot
+from exceptions import (InvalidTokenException,
+                        InvalidApiExc,
+                        EmptyListException)
 
 load_dotenv()
 
@@ -11,7 +14,7 @@ PRACTICUM_TOKEN = os.getenv('PR_TOKEN')
 TELEGRAM_TOKEN = os.getenv('MY_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('CHAT_ID')
 
-RETRY_TIME = 600
+RETRY_TIME = 10
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -32,16 +35,12 @@ def get_api_answer(current_timestamp):
     """Проверка успешности запроса к API и возврат ответа API."""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
-    try:
-        homework_statuses = requests.get(
-            ENDPOINT,
-            headers=HEADERS,
-            params=params
-        )
-    except Exception as error:
-        raise ValueError(f'Ошибка при запросе к API - {error}')
+    homework_statuses = requests.get(
+        ENDPOINT,
+        headers=HEADERS,
+        params=params
+    )
     if homework_statuses.status_code != 200:
-        print(homework_statuses.status_code)
         homework_statuses.raise_for_status()
     return homework_statuses.json()
 
@@ -49,26 +48,27 @@ def get_api_answer(current_timestamp):
 def check_response(response):
     """Проверка ответа API и возврат списка работ."""
     if type(response) is not dict:
-        raise TypeError('Некорректный тип данных')
+        raise TypeError('not dict после .json() в ответе API')
     if len(response) != 2:
-        raise ValueError('Некорректный ответ API')
+        raise InvalidApiExc('Некорректный ответ API')
     elif type(response.get('homeworks')) is not list:
-        raise ValueError('Некорректный тип данных')
+        raise InvalidApiExc('not list в ответе API по ключу homeworks')
+    elif not response.get('homeworks'):
+        raise EmptyListException('Новых статусов нет')
     else:
-        return response.get('homeworks')
+        return response.get('homeworks')[0]
 
 
 def parse_status(homework):
-    """."""
-    if homework:
-        if 'homework_name' or 'status' not in homework[0]:
-            raise KeyError('Ошибка - отсутствие значений')
-        homework_name = homework[0].get('homework_name')
-        homework_status = homework[0].get('status')
-        if homework_status not in HOMEWORK_STATUSES:
-            raise KeyError('Некорректный статус')
-        verdict = HOMEWORK_STATUSES[homework_status]
-        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    """Получение статуса домашней работы из ответа API."""
+    if not homework:
+        raise InvalidApiExc('Словарь homeworks пуст')
+    if 'homework_name' not in homework:
+        raise KeyError('Ключ homework_name отсутствует')
+    homework_name = homework.get('homework_name')
+    homework_status = homework.get('status')
+    verdict = HOMEWORK_STATUSES[homework_status]
+    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def check_tokens():
@@ -80,27 +80,50 @@ def check_tokens():
 def main():
     """Основная логика работы бота."""
     bot = Bot(token=TELEGRAM_TOKEN)
-    message = 'Я работаю'
-    send_message(bot, message)
-    # current_timestamp = int(time.time())
-
-    # ...
-
-    # while True:
-    #     try:
-    #         response = ...
-
-    #         ...
-
-    #         current_timestamp = ...
-    #         time.sleep(RETRY_TIME)
-
-    #     except Exception as error:
-    #         message = f'Сбой в работе программы: {error}'
-    #         ...
-    #         time.sleep(RETRY_TIME)
-    #     else:
-    #         ...
+    current_timestamp = 1
+    last_error = ''
+    if not check_tokens():
+        raise InvalidTokenException('Недоступны переменные окружения')
+    while True:
+        try:
+            response = get_api_answer(current_timestamp)
+            current_timestamp = response.get('current_date')
+            homeworks = check_response(response)
+            status = parse_status(homeworks)
+            send_message(bot, status)
+            time.sleep(RETRY_TIME)
+        except EmptyListException:
+            time.sleep(RETRY_TIME)
+        except (InvalidApiExc, TypeError, KeyError, Exception) as error:
+            message = f'Сбой в работе программы: {error}'
+            if error != last_error:
+                send_message(bot, message)
+                last_error = error
+                time.sleep(RETRY_TIME)
+        # except TypeError as error:
+        #     message = f'API не вернул словарь - {error}'
+        #     if error != last_error:
+        #         send_message(bot, message)
+        #         last_error = error
+        #         time.sleep(RETRY_TIME)
+        # except KeyError as error:
+        #     message = f'Ключ homework_name отсутствует - {error}'
+        #     if error != last_error:
+        #         send_message(bot, message)
+        #         last_error = error
+        #         time.sleep(RETRY_TIME)
+        # except requests.Timeout as error:
+        #     message = f'Сбой в работе программы: {error}'
+        #     if error != last_error:
+        #         send_message(bot, message)
+        #         last_error = error
+        #         time.sleep(RETRY_TIME)
+        # except Exception as error:
+        #     message = f'Сбой в работе программы: {error}'
+        #     if error != last_error:
+        #         send_message(bot, message)
+        #         last_error = error
+        #         time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
