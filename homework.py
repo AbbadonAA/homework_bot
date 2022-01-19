@@ -1,20 +1,30 @@
+import logging
 import os
-from dotenv import load_dotenv
-import requests
+import sys
 import time
+
+import requests
+from dotenv import load_dotenv
 from telegram import Bot
-from exceptions import (InvalidTokenException,
-                        InvalidApiExc,
-                        EmptyListException)
+
+from exceptions import EmptyListException, InvalidApiExc, InvalidTokenException
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter(
+    '%(asctime)s [%(levelname)s] - %(message)s'
+)
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 PRACTICUM_TOKEN = os.getenv('PR_TOKEN')
 TELEGRAM_TOKEN = os.getenv('MY_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('CHAT_ID')
 
-RETRY_TIME = 10
+RETRY_TIME = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -29,6 +39,7 @@ HOMEWORK_STATUSES = {
 def send_message(bot, message):
     """Отправка сообщения."""
     bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+    logger.info(f'Бот отправил сообщение: {message}')
 
 
 def get_api_answer(current_timestamp):
@@ -83,47 +94,29 @@ def main():
     current_timestamp = 1
     last_error = ''
     if not check_tokens():
+        logger.critical('Недоступны переменные окружения!')
         raise InvalidTokenException('Недоступны переменные окружения')
     while True:
         try:
+            logger.debug('Начало итерации, запрос к API')
             response = get_api_answer(current_timestamp)
             current_timestamp = response.get('current_date')
             homeworks = check_response(response)
             status = parse_status(homeworks)
             send_message(bot, status)
-            time.sleep(RETRY_TIME)
         except EmptyListException:
-            time.sleep(RETRY_TIME)
+            logger.debug('Новых статусов в ответе API нет')
         except (InvalidApiExc, TypeError, KeyError, Exception) as error:
             message = f'Сбой в работе программы: {error}'
+            logger.error(message)
             if error != last_error:
                 send_message(bot, message)
                 last_error = error
-                time.sleep(RETRY_TIME)
-        # except TypeError as error:
-        #     message = f'API не вернул словарь - {error}'
-        #     if error != last_error:
-        #         send_message(bot, message)
-        #         last_error = error
-        #         time.sleep(RETRY_TIME)
-        # except KeyError as error:
-        #     message = f'Ключ homework_name отсутствует - {error}'
-        #     if error != last_error:
-        #         send_message(bot, message)
-        #         last_error = error
-        #         time.sleep(RETRY_TIME)
-        # except requests.Timeout as error:
-        #     message = f'Сбой в работе программы: {error}'
-        #     if error != last_error:
-        #         send_message(bot, message)
-        #         last_error = error
-        #         time.sleep(RETRY_TIME)
-        # except Exception as error:
-        #     message = f'Сбой в работе программы: {error}'
-        #     if error != last_error:
-        #         send_message(bot, message)
-        #         last_error = error
-        #         time.sleep(RETRY_TIME)
+        else:
+            logger.debug('Успешная итерация - нет исключений')
+        finally:
+            logger.debug('Итерация завершена')
+            time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
