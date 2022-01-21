@@ -14,7 +14,7 @@ from exceptions import (EmptyListException, InvalidApiExc, InvalidResponseExc,
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter(
     '%(asctime)s [%(levelname)s] - %(message)s'
