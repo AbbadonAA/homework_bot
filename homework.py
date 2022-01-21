@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from telegram import Bot
 
 from exceptions import (EmptyListException, InvalidApiExc, InvalidResponseExc,
-                        InvalidTokenException)
+                        InvalidTokenException, InvalidJsonExc)
 
 load_dotenv()
 
@@ -58,7 +58,7 @@ def get_api_answer(current_timestamp):
             params=params
         )
     except Exception as error:
-        logger.error(f'Ошибка ответа API: {error}')
+        raise InvalidApiExc(f'Ошибка ответа API: {error}')
     status = homework_statuses.status_code
     if status != HTTPStatus.OK:
         logger.error(f'Ответ API: {status}')
@@ -66,7 +66,7 @@ def get_api_answer(current_timestamp):
     try:
         return homework_statuses.json()
     except Exception as error:
-        logger.error(f'Ошибка декодирования JSON: {error}')
+        raise InvalidJsonExc(f'Ошибка декодирования JSON: {error}')
 
 
 def check_response(response):
@@ -82,7 +82,7 @@ def check_response(response):
     try:
         return response.get('homeworks')[0]
     except Exception as error:
-        logger.error(f'Из ответа API не получен список работ: {error}')
+        raise InvalidResponseExc(f'Из ответа не получен список работ: {error}')
 
 
 def parse_status(homework):

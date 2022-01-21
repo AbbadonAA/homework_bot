@@ -20,3 +20,9 @@ class InvalidResponseExc(Exception):
     """Исключение - status_code API != 200."""
 
     pass
+
+
+class InvalidJsonExc(Exception):
+    """Исключение - Некорректное декодирование JSON."""
+
+    pass
