@@ -11,6 +11,8 @@ from telegram import Bot
 from exceptions import (EmptyListException, InvalidApiExc, InvalidResponseExc,
                         InvalidTokenException, InvalidJsonExc)
 
+# path = r'C:\Dev\homework_bot\infra\.env'
+# load_dotenv(path)
 load_dotenv()
 
 logger = logging.getLogger(__name__)
